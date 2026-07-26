@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Workspace Editor</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #1e1e1e;
+      color: #ccc;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #topbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #252526;
+      border-bottom: 1px solid #3c3c3c;
+      padding: 6px 10px;
+      flex-shrink: 0;
+      min-height: 44px;
+      flex-wrap: wrap;
+    }
+
+    #hamburger {
+      display: none;
+      background: none;
+      border: none;
+      color: #ccc;
+      font-size: 20px;
+      cursor: pointer;
+      padding: 4px 6px;
+      flex-shrink: 0;
+    }
+
+    #breadcrumb {
+      flex: 1;
+      font-size: 13px;
+      color: #9cdcfe;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 60px;
+    }
+
+    .btn {
+      background: #0e639c;
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      padding: 5px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #1177bb; }
+    .btn.danger { background: #c72e2e; }
+    .btn.danger:hover { background: #e03333; }
+    .btn.secondary { background: #3c3c3c; }
+    .btn.secondary:hover { background: #505050; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    #main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #sidebar {
+      width: 240px;
+      min-width: 180px;
+      max-width: 320px;
+      background: #252526;
+      border-right: 1px solid #3c3c3c;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    #sidebar-header {
+      padding: 8px 10px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #888;
+      border-bottom: 1px solid #3c3c3c;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #refresh-tree {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px 4px;
+      border-radius: 3px;
+    }
+    #refresh-tree:hover { color: #ccc; background: #3c3c3c; }
+
+    #tree {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+
+    #tree::-webkit-scrollbar { width: 6px; }
+    #tree::-webkit-scrollbar-track { background: #252526; }
+    #tree::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+    .tree-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      cursor: pointer;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+    .tree-item:hover { background: #2a2d2e; }
+    .tree-item.active { background: #094771; color: #fff; }
+
+    .tree-icon { font-size: 14px; flex-shrink: 0; }
+    .tree-label { overflow: hidden; text-overflow: ellipsis; }
+
+    #editor-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #editor-container { flex: 1; overflow: hidden; }
+
+    #placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: #555;
+      font-size: 15px;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #image-viewer {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      background: #1e1e1e;
+      padding: 16px;
+      gap: 12px;
+    }
+    #image-viewer img {
+      max-width: 100%;
+      max-height: calc(100vh - 120px);
+      object-fit: contain;
+      border-radius: 4px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+    #image-meta {
+      font-size: 12px;
+      color: #666;
+    }
+
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #28a745;
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    #toast.show { opacity: 1; }
+    #toast.error { background: #c72e2e; }
+
+    #overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+    }
+
+    #modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-backdrop.show { display: flex; }
+    #modal {
+      background: #2d2d2d;
+      border: 1px solid #555;
+      border-radius: 8px;
+      padding: 20px;
+      width: 320px;
+      max-width: 90vw;
+    }
+    #modal h3 { margin-bottom: 12px; font-size: 15px; color: #e0e0e0; }
+    #modal input {
+      width: 100%;
+      background: #1e1e1e;
+      border: 1px solid #555;
+      color: #ccc;
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 12px;
+    }
+    #modal input:focus { outline: none; border-color: #0e639c; }
+    .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+
+    @media (max-width: 600px) {
+      #hamburger { display: block; }
+      #sidebar {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        z-index: 110;
+        transform: translateX(-100%);
+        width: 280px;
+      }
+      #sidebar.open { transform: translateX(0); }
+      #overlay.show { display: block; }
+      .btn span.label { display: none; }
+      .btn { padding: 5px 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="hamburger" onclick="toggleSidebar()">☰</button>
+  <div id="breadcrumb">No file open</div>
+  <button class="btn" id="btn-save" onclick="saveFile()" disabled>💾 <span class="label">Save</span></button>
+  <button class="btn secondary" id="btn-new-file" onclick="newFile()">＋ <span class="label">File</span></button>
+  <button class="btn secondary" id="btn-new-folder" onclick="newFolder()">📁 <span class="label">Folder</span></button>
+  <button class="btn danger" id="btn-delete" onclick="deleteFile()" disabled>🗑 <span class="label">Delete</span></button>
+</div>
+
+<div id="main">
+  <div id="overlay" onclick="closeSidebar()"></div>
+
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <span>Explorer</span>
+      <button id="refresh-tree" onclick="loadTree()" title="Refresh">↻</button>
+    </div>
+    <div id="tree"><div style="padding:12px;color:#555;font-size:13px">Loading...</div></div>
+  </div>
+
+  <div id="editor-wrap">
+    <div id="placeholder">
+      <div style="font-size:40px">🐉</div>
+      <div>Select a file to edit</div>
+    </div>
+    <div id="image-viewer" style="display:none">
+      <img id="image-el" src="" alt="Preview" />
+      <div id="image-meta"></div>
+    </div>
+    <div id="editor-container" style="display:none"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="modal-backdrop">
+  <div id="modal">
+    <h3 id="modal-title">Enter name</h3>
+    <input id="modal-input" type="text" placeholder="" />
+    <div class="modal-btns">
+      <button class="btn secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="modal-confirm">OK</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+<script>
+  const params = new URLSearchParams(location.search);
+  const TOKEN = params.get('token') || '';
+  let editor = null;
+  let currentFile = null;
+  let isDirty = false;
+  let expandedDirs = new Set();
+
+  function apiUrl(path, extra = {}) {
+    const p = new URLSearchParams({ token: TOKEN, ...extra });
+    return path + '?' + p.toString();
+  }
+
+  async function apiFetch(url, opts = {}) {
+    const res = await fetch(url, opts);
+    if (res.status === 401) { showToast('Unauthorized — check token', true); throw new Error('Unauthorized'); }
+    return res;
+  }
+
+  require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs' } });
+  require(['vs/editor/editor.main'], () => {
+    editor = monaco.editor.create(document.getElementById('editor-container'), {
+      value: '',
+      language: 'plaintext',
+      theme: 'vs-dark',
+      automaticLayout: true,
+      fontSize: 14,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: 'on',
+    });
+    editor.onDidChangeModelContent(() => {
+      if (!isDirty) { isDirty = true; updateBreadcrumb(); }
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveFile);
+    loadTree();
+  });
+
+  async function loadTree() {
+    document.getElementById('tree').innerHTML = '<div style="padding:12px;color:#555;font-size:13px">Loading...</div>';
+    try {
+      const res = await apiFetch(apiUrl('/api/tree'));
+      const data = await res.json();
+      renderTree(data, document.getElementById('tree'), 0);
+    } catch (e) {
+      document.getElementById('tree').innerHTML = '<div style="padding:12px;color:#c72e2e;font-size:13px">Error loading tree</div>';
+    }
+  }
+
+  function renderTree(nodes, container, depth) {
+    container.innerHTML = '';
+    for (const node of nodes) {
+      const el = document.createElement('div');
+      el.className = 'tree-item' + (currentFile === node.path ? ' active' : '');
+      el.style.paddingLeft = (8 + depth * 16) + 'px';
+
+      if (node.type === 'dir') {
+        const isOpen = expandedDirs.has(node.path);
+        el.innerHTML = `<span class="tree-icon">${isOpen ? '📂' : '📁'}</span><span class="tree-label">${escHtml(node.name)}</span>`;
+        el.onclick = () => toggleDir(node, el, depth);
+        container.appendChild(el);
+
+        if (isOpen && node.children) {
+          const sub = document.createElement('div');
+          renderTree(node.children, sub, depth + 1);
+          container.appendChild(sub);
+        }
+      } else {
+        el.innerHTML = `<span class="tree-icon">${fileIcon(node.name)}</span><span class="tree-label">${escHtml(node.name)}</span>`;
+        el.onclick = () => openFile(node.path);
+        container.appendChild(el);
+      }
+    }
+  }
+
+  function toggleDir(node, el, depth) {
+    if (expandedDirs.has(node.path)) {
+      expandedDirs.delete(node.path);
+    } else {
+      expandedDirs.add(node.path);
+    }
+    loadTree();
+  }
+
+  const IMAGE_EXTS = new Set(['png','jpg','jpeg','gif','webp','svg','bmp','ico']);
+
+  function isImage(name) {
+    return IMAGE_EXTS.has(name.split('.').pop().toLowerCase());
+  }
+
+  function fileIcon(name) {
+    const ext = name.split('.').pop().toLowerCase();
+    const icons = {
+      js: '🟨', ts: '🔷', json: '📋', md: '📝', html: '🌐', css: '🎨',
+      py: '🐍', sh: '⚙️', txt: '📄', env: '🔒', yml: '⚙️', yaml: '⚙️',
+      gitignore: '🚫',
+      png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️', webp: '🖼️', svg: '🖼️', bmp: '🖼️', ico: '🖼️',
+    };
+    return icons[ext] || '📄';
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function openFile(relPath) {
+    if (isDirty && currentFile) {
+      if (!confirm('Discard unsaved changes?')) return;
+    }
+    closeSidebar();
+
+    currentFile = relPath;
+    isDirty = false;
+    updateBreadcrumb();
+    document.getElementById('btn-delete').disabled = false;
+
+    if (isImage(relPath)) {
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('editor-container').style.display = 'none';
+      document.getElementById('btn-save').disabled = true;
+
+      const imgEl = document.getElementById('image-el');
+      const metaEl = document.getElementById('image-meta');
+      const src = apiUrl('/raw', { path: relPath });
+      imgEl.src = src;
+      imgEl.onload = () => {
+        metaEl.textContent = `${imgEl.naturalWidth} × ${imgEl.naturalHeight}px`;
+      };
+      imgEl.onerror = () => { metaEl.textContent = 'Failed to load image'; };
+      metaEl.textContent = '';
+      document.getElementById('image-viewer').style.display = 'flex';
+      return;
+    }
+
+    document.getElementById('image-viewer').style.display = 'none';
+    try {
+      const res = await apiFetch(apiUrl('/api/file', { path: relPath }));
+      if (!res.ok) throw new Error(await res.text());
+      const text = await res.text();
+
+      document.getElementById('placeholder').style.display = 'none';
+      document.getElementById('editor-container').style.display = 'block';
+
+      const lang = detectLang(relPath);
+      const model = monaco.editor.createModel(text, lang);
+      const old = editor.getModel();
+      editor.setModel(model);
+      if (old) old.dispose();
+
+      document.getElementById('btn-save').disabled = false;
+    } catch (e) {
+      showToast('Failed to open file: ' + e.message, true);
+    }
+  }
+
+  async function saveFile() {
+    if (!currentFile || !editor) return;
+    try {
+      const res = await apiFetch(apiUrl('/api/file', { path: currentFile }), {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: editor.getValue(),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      isDirty = false;
+      updateBreadcrumb();
+      showToast('Saved ✓');
+    } catch (e) {
+      showToast('Save failed: ' + e.message, true);
+    }
+  }
+
+  async function deleteFile() {
+    if (!currentFile) return;
+    if (!confirm(`Delete "${currentFile}"?`)) return;
+    try {
+      const res = await apiFetch(apiUrl('/api/file', { path: currentFile }), { method: 'DELETE' });
+      if (!res.ok) throw new Error(await res.text());
+      currentFile = null;
+      isDirty = false;
+      document.getElementById('placeholder').style.display = 'flex';
+      document.getElementById('editor-container').style.display = 'none';
+      document.getElementById('image-viewer').style.display = 'none';
+      document.getElementById('breadcrumb').textContent = 'No file open';
+      document.getElementById('btn-save').disabled = true;
+      document.getElementById('btn-delete').disabled = true;
+      showToast('Deleted');
+      loadTree();
+    } catch (e) {
+      showToast('Delete failed: ' + e.message, true);
+    }
+  }
+
+  function newFile() {
+    const prefix = currentFile ? currentFile.split('/').slice(0, -1).join('/') : '';
+    showModal('New File', 'filename.txt', async (name) => {
+      if (!name) return;
+      const relPath = prefix ? `${prefix}/${name}` : name;
+      try {
+        await apiFetch(apiUrl('/api/file', { path: relPath }), {
+          method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: '',
+        });
+        await loadTree();
+        openFile(relPath);
+      } catch (e) { showToast('Error: ' + e.message, true); }
+    });
+  }
+
+  function newFolder() {
+    const prefix = currentFile ? currentFile.split('/').slice(0, -1).join('/') : '';
+    showModal('New Folder', 'folder-name', async (name) => {
+      if (!name) return;
+      const relPath = prefix ? `${prefix}/${name}` : name;
+      try {
+        await apiFetch(apiUrl('/api/mkdir'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: relPath }),
+        });
+        showToast('Folder created');
+        loadTree();
+      } catch (e) { showToast('Error: ' + e.message, true); }
+    });
+  }
+
+  function updateBreadcrumb() {
+    const el = document.getElementById('breadcrumb');
+    if (!currentFile) { el.textContent = 'No file open'; return; }
+    el.textContent = (isDirty ? '● ' : '') + currentFile;
+    document.title = (isDirty ? '● ' : '') + currentFile.split('/').pop() + ' — Workspace Editor';
+  }
+
+  function showToast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show' + (isError ? ' error' : '');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 2200);
+  }
+
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('show');
+  }
+  function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+  }
+
+  let _modalCallback = null;
+  function showModal(title, placeholder, cb) {
+    _modalCallback = cb;
+    document.getElementById('modal-title').textContent = title;
+    document.getElementById('modal-input').value = '';
+    document.getElementById('modal-input').placeholder = placeholder;
+    document.getElementById('modal-backdrop').classList.add('show');
+    setTimeout(() => document.getElementById('modal-input').focus(), 50);
+    document.getElementById('modal-confirm').onclick = () => {
+      const val = document.getElementById('modal-input').value.trim();
+      closeModal();
+      if (val && _modalCallback) _modalCallback(val);
+    };
+  }
+  function closeModal() { document.getElementById('modal-backdrop').classList.remove('show'); }
+  document.getElementById('modal-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('modal-confirm').click();
+    if (e.key === 'Escape') closeModal();
+  });
+
+  function detectLang(filename) {
+    const ext = filename.split('.').pop().toLowerCase();
+    const map = {
+      js: 'javascript', ts: 'typescript', jsx: 'javascript', tsx: 'typescript',
+      json: 'json', md: 'markdown', html: 'html', css: 'css', scss: 'scss',
+      py: 'python', sh: 'shell', bash: 'shell', yaml: 'yaml', yml: 'yaml',
+      xml: 'xml', sql: 'sql', rs: 'rust', go: 'go', rb: 'ruby',
+      java: 'java', c: 'c', cpp: 'cpp', h: 'cpp', cs: 'csharp',
+      php: 'php', swift: 'swift', kt: 'kotlin', env: 'shell',
+    };
+    return map[ext] || 'plaintext';
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "workspace-editor",
+  "version": "1.0.0",
+  "description": "Local file editor web app for OpenClaw agents",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
