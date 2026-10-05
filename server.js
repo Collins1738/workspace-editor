@@ -7,15 +7,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const TOKEN = process.env.EDITOR_TOKEN || 'dravon123';
 
-const ROOTS = {};
-if (process.env.WORKSPACE_ROOT) ROOTS.workspace = process.env.WORKSPACE_ROOT;
-if (process.env.EXTRA_ROOT)     ROOTS.extra     = process.env.EXTRA_ROOT;
+const ROOTS = {
+  workspace: process.env.WORKSPACE_ROOT || '/Users/collinsc/.openclaw/workspace',
+  development: process.env.EXTRA_ROOT || '/Users/collinsc/Development',
+  'ovos-config': '/Users/collinsc/.config/mycroft',
+  'ovos-logs': '/Users/collinsc/.local/state/mycroft/logs',
+  'ovos-launchagents': '/Users/collinsc/Library/LaunchAgents',
+};
 
-// Fallback to defaults if no env vars set
-if (Object.keys(ROOTS).length === 0) {
-  ROOTS.workspace   = '/Users/collinsc/.openclaw/workspace';
-  ROOTS.development = '/Users/collinsc/Development';
-}
+// Runtime output and launchd definitions are visible for inspection, but protected from editor writes.
+const READ_ONLY_ROOTS = new Set(['ovos-logs', 'ovos-launchagents']);
 
 // Middleware
 app.use(express.text({ type: '*/*', limit: '10mb' }));
@@ -42,6 +43,14 @@ function safePath(relPath) {
   const abs = subPath ? path.join(base, subPath) : base;
   if (!abs.startsWith(base)) return null;
   return abs;
+}
+
+function isReadOnlyPath(relPath) {
+  return READ_ONLY_ROOTS.has((relPath || '').split('/')[0]);
+}
+
+function rejectReadOnly(res) {
+  return res.status(403).json({ error: 'This root is read-only' });
 }
 
 // Recursive file tree builder
@@ -102,6 +111,7 @@ app.get('/api/file', auth, (req, res) => {
 app.post('/api/file', auth, (req, res) => {
   const abs = safePath(req.query.path);
   if (!abs) return res.status(400).json({ error: 'Invalid path' });
+  if (isReadOnlyPath(req.query.path)) return rejectReadOnly(res);
   try {
     fs.mkdirSync(path.dirname(abs), { recursive: true });
     fs.writeFileSync(abs, req.body, 'utf8');
@@ -114,6 +124,7 @@ app.post('/api/file', auth, (req, res) => {
 app.post('/api/mkdir', auth, (req, res) => {
   const abs = safePath(req.body.path);
   if (!abs) return res.status(400).json({ error: 'Invalid path' });
+  if (isReadOnlyPath(req.body.path)) return rejectReadOnly(res);
   try {
     fs.mkdirSync(abs, { recursive: true });
     res.json({ ok: true });
@@ -143,6 +154,7 @@ app.get('/raw', auth, (req, res) => {
 app.delete('/api/file', auth, (req, res) => {
   const abs = safePath(req.query.path);
   if (!abs) return res.status(400).json({ error: 'Invalid path' });
+  if (isReadOnlyPath(req.query.path)) return rejectReadOnly(res);
   try {
     const stat = fs.statSync(abs);
     if (stat.isDirectory()) {
@@ -160,6 +172,7 @@ app.post('/api/rename', auth, (req, res) => {
   const fromAbs = safePath(req.body.from);
   const toAbs = safePath(req.body.to);
   if (!fromAbs || !toAbs) return res.status(400).json({ error: 'Invalid path' });
+  if (isReadOnlyPath(req.body.from) || isReadOnlyPath(req.body.to)) return rejectReadOnly(res);
   try {
     fs.mkdirSync(path.dirname(toAbs), { recursive: true });
     fs.renameSync(fromAbs, toAbs);
